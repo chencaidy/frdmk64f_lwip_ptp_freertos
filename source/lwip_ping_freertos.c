@@ -28,9 +28,16 @@
 #include "fsl_phyksz8081.h"
 #include "fsl_enet_mdio.h"
 #include "fsl_device_registers.h"
+
+/* SEGGER SystemView includes */
+#include "SEGGER_RTT.h"
+
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
+
+/* SEGGER SystemView definitions */
+extern SEGGER_RTT_CB _SEGGER_RTT;
 
 /* @TEST_ANCHOR */
 
@@ -175,6 +182,9 @@ int main(void)
     BOARD_InitDebugConsole();
     /* Disable SYSMPU. */
     base->CESR &= ~SYSMPU_CESR_VLD_MASK;
+
+    SEGGER_SYSVIEW_Conf();
+    PRINTF("RTT block address is: 0x%x \r\n", &_SEGGER_RTT);
 
     mdioHandle.resource.csrClock_Hz = EXAMPLE_CLOCK_FREQ;
 
