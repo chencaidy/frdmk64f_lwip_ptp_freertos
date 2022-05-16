@@ -52,7 +52,7 @@ extern SEGGER_RTT_CB _SEGGER_RTT;
 #define configIP_ADDR2 0
 #endif
 #ifndef configIP_ADDR3
-#define configIP_ADDR3 102
+#define configIP_ADDR3 50
 #endif
 
 /* Netmask configuration. */
@@ -80,7 +80,7 @@ extern SEGGER_RTT_CB _SEGGER_RTT;
 #define configGW_ADDR2 0
 #endif
 #ifndef configGW_ADDR3
-#define configGW_ADDR3 100
+#define configGW_ADDR3 1
 #endif
 
 /* MAC address configuration. */
