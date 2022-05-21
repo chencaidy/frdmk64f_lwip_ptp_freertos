@@ -129,6 +129,13 @@ void sys_mark_tcpip_thread(void);
 #define PBUF_POOL_SIZE 5
 #endif
 
+/* LWIP_PBUF_CUSTOM_DATA: add timestamp to the pbuf pool. */
+#ifndef LWIP_PBUF_CUSTOM_DATA
+#define LWIP_PBUF_CUSTOM_DATA \
+   u32_t second;              \
+   u32_t nanosecond;
+#endif
+
 /* PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool. */
 /* Default value is defined in lwip\src\include\lwip\opt.h as
  * LWIP_MEM_ALIGN_SIZE(TCP_MSS+40+PBUF_LINK_ENCAPSULATION_HLEN+PBUF_LINK_HLEN)*/

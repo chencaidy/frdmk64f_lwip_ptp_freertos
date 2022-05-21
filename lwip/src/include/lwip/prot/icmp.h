@@ -93,6 +93,16 @@ struct icmp_echo_hdr {
   PACK_STRUCT_FIELD(u16_t id);
   PACK_STRUCT_FIELD(u16_t seqno);
 } PACK_STRUCT_STRUCT;
+struct icmp_timestamp {
+  PACK_STRUCT_FLD_8(u8_t type);
+  PACK_STRUCT_FLD_8(u8_t code);
+  PACK_STRUCT_FIELD(u16_t chksum);
+  PACK_STRUCT_FIELD(u16_t id);
+  PACK_STRUCT_FIELD(u16_t seqno);
+  PACK_STRUCT_FIELD(u32_t originate);
+  PACK_STRUCT_FIELD(u32_t receive);
+  PACK_STRUCT_FIELD(u32_t transmit);
+} PACK_STRUCT_STRUCT;
 PACK_STRUCT_END
 #ifdef PACK_STRUCT_USE_INCLUDES
 #  include "arch/epstruct.h"

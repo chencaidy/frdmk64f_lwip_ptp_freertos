@@ -166,7 +166,7 @@ static void stack_init(void *arg)
            ((u8_t *)&netif_gw)[2], ((u8_t *)&netif_gw)[3]);
     PRINTF("************************************************\r\n");
 
-    ping_init(&netif_gw);
+    // ping_init(&netif_gw);
 
     vTaskDelete(NULL);
 }

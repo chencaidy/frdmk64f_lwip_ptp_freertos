@@ -74,3 +74,6 @@ local.properties
 Debug
 Release
 script.jlink
+
+### Visual Studio Code ###
+.vscode

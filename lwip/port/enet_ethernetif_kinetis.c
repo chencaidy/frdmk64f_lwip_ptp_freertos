@@ -163,12 +163,15 @@ struct ethernetif
     EventGroupHandle_t enetTransmitAccessEvent;
     EventBits_t txFlag;
 #endif
+    enet_frame_info_t *TxFrameInfoArray;
     enet_rx_bd_struct_t *RxBuffDescrip;
     enet_tx_bd_struct_t *TxBuffDescrip;
     rx_buffer_t *RxDataBuff;
     tx_buffer_t *TxDataBuff;
     rx_pbuf_wrapper_t RxPbufs[ENET_RXBUFF_NUM];
 };
+
+static struct ethernetif *ptp_ethernetif = NULL;
 
 /*******************************************************************************
  * Prototypes
@@ -204,6 +207,11 @@ static void ethernet_callback(ENET_Type *base,
         case kENET_TxEvent:
         {
             portBASE_TYPE taskToWake = pdFALSE;
+
+            if (frameInfo->isTsAvail)
+            {
+                SEGGER_SYSVIEW_PrintfTarget("enet send ts=%d.%09d", (uint32_t)frameInfo->timeStamp.second, frameInfo->timeStamp.nanosecond);
+            }
 
 #ifdef __CA7_REV
             if (SystemGetIRQNestingLevel())
@@ -354,6 +362,44 @@ static void ethernetif_rx_free(ENET_Type *base, void *buffer, void *userData, ui
 }
 
 /**
+ * Initializes ENET 1588 timer.
+ */
+void ethernetif_enet_ptptime_init(struct ethernetif *ethernetif,
+                                  bool pps_en)
+{
+    enet_ptp_config_t ptpConfig;
+
+    assert(ethernetif);
+    ptp_ethernetif = ethernetif;
+
+    /* Set the enet 1588 timer src. */
+    CLOCK_SetEnetTime0Clock(2);
+    /* Prepare the PTP configure */
+    ptpConfig.channel = kENET_PtpTimerChannel1;
+    ptpConfig.ptp1588ClockSrc_Hz = CLOCK_GetFreq(kCLOCK_Osc0ErClk);
+    /* Configure PTP */
+    ENET_Ptp1588Configure(ptp_ethernetif->base, &ptp_ethernetif->handle, &ptpConfig);
+}
+
+/**
+ * Return ENET 1588 timestamp.
+ */
+static void ethernetif_enet_ptptime_gettime(enet_ptp_time_t *timestamp)
+{
+    assert(ptp_ethernetif);
+    ENET_Ptp1588GetTimer(ptp_ethernetif->base, &ptp_ethernetif->handle, timestamp);
+}
+
+/**
+ * Update ENET 1588 timestamp.
+ */
+static void ethernetif_enet_ptptime_settime(enet_ptp_time_t *timestamp)
+{
+    assert(ptp_ethernetif);
+    ENET_Ptp1588SetTimer(ptp_ethernetif->base, &ptp_ethernetif->handle, timestamp);
+}
+
+/**
  * Initializes ENET driver.
  */
 void ethernetif_enet_init(struct netif *netif,
@@ -379,7 +425,7 @@ void ethernetif_enet_init(struct netif *netif,
     buffCfg[0].rxBufferAlign =
         NULL; /* Receive data buffer start address. NULL when buffers are allocated by callback for RX zero-copy. */
     buffCfg[0].txBufferAlign = &(ethernetif->TxDataBuff[0][0]); /* Transmit data buffer start address. */
-    buffCfg[0].txFrameInfo = NULL; /* Transmit frame information start address. Set only if using zero-copy transmit. */
+    buffCfg[0].txFrameInfo = &(ethernetif->TxFrameInfoArray[0]); /* Transmit frame information start address. Set only if using zero-copy transmit. */
     buffCfg[0].rxMaintainEnable = true; /* Receive buffer cache maintain. */
     buffCfg[0].txMaintainEnable = true; /* Transmit buffer cache maintain. */
 
@@ -453,6 +499,10 @@ void ethernetif_enet_init(struct netif *netif,
     /* Initialize the ENET module. */
     ENET_Init(ethernetif->base, &ethernetif->handle, &config, &buffCfg[0], netif->hwaddr, sysClock);
 
+    /* Initialize the ENET 1588 module. */
+    ethernetif_enet_ptptime_init(ethernetif, false);
+    ENET_SetTxReclaim(&ethernetif->handle, true, 0);
+
     ENET_ActiveRead(ethernetif->base);
 }
 
@@ -482,7 +532,7 @@ static err_t enet_send_frame(struct ethernetif *ethernetif, unsigned char *data,
 
         do
         {
-            result = ENET_SendFrame(ethernetif->base, &ethernetif->handle, data, length, 0, false, NULL);
+            result = ENET_SendFrame(ethernetif->base, &ethernetif->handle, data, length, 0, true, NULL);
 
             if (result == kStatus_ENET_TxFrameBusy)
             {
@@ -599,6 +649,14 @@ struct pbuf *ethernetif_linkinput(struct netif *netif)
         case kStatus_Success:
             /* Frame read, process it into pbufs. */
             p = ethernetif_rx_frame_to_pbufs(ethernetif, &rxFrame);
+            /* Read timestamp, process it into pbufs. */
+            enet_ptp_time_t ptpTime;
+            ethernetif_enet_ptptime_gettime(&ptpTime);
+            if (ptpTime.nanosecond < rxFrame.rxAttribute.timestamp)
+                ptpTime.second--;
+            p->second = (uint32_t)ptpTime.second;
+            p->nanosecond = rxFrame.rxAttribute.timestamp;
+            SEGGER_SYSVIEW_PrintfTarget("enet recv ts=%d.%09d", (uint32_t)ptpTime.second, rxFrame.rxAttribute.timestamp);
             break;
 
         case kStatus_ENET_RxFrameEmpty:
@@ -717,11 +775,13 @@ err_t ethernetif_linkoutput(struct netif *netif, struct pbuf *p)
 err_t ethernetif0_init(struct netif *netif)
 {
     static struct ethernetif ethernetif_0;
+    static enet_frame_info_t txFrameInfoArray_0[ENET_TXBD_NUM];
     AT_NONCACHEABLE_SECTION_ALIGN(static enet_rx_bd_struct_t rxBuffDescrip_0[ENET_RXBD_NUM], FSL_ENET_BUFF_ALIGNMENT);
     AT_NONCACHEABLE_SECTION_ALIGN(static enet_tx_bd_struct_t txBuffDescrip_0[ENET_TXBD_NUM], FSL_ENET_BUFF_ALIGNMENT);
     SDK_ALIGN(static rx_buffer_t rxDataBuff_0[ENET_RXBUFF_NUM], FSL_ENET_BUFF_ALIGNMENT);
     SDK_ALIGN(static tx_buffer_t txDataBuff_0[ENET_TXBD_NUM], FSL_ENET_BUFF_ALIGNMENT);
 
+    ethernetif_0.TxFrameInfoArray = &(txFrameInfoArray_0[0]);
     ethernetif_0.RxBuffDescrip = &(rxBuffDescrip_0[0]);
     ethernetif_0.TxBuffDescrip = &(txBuffDescrip_0[0]);
     ethernetif_0.RxDataBuff    = &(rxDataBuff_0[0]);
