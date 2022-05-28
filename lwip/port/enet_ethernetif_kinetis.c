@@ -381,8 +381,6 @@ void ethernetif_enet_ptptime_init(struct ethernetif *ethernetif,
     assert(ethernetif);
     ptp_ethernetif = ethernetif;
 
-    /* Set the enet 1588 timer src. */
-    CLOCK_SetEnetTime0Clock(2);
     /* Prepare the PTP configure */
     ptpConfig.channel = kENET_PtpTimerChannel1;
     ptpConfig.ptp1588ClockSrc_Hz = CLOCK_GetFreq(kCLOCK_Osc0ErClk);

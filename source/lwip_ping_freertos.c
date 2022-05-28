@@ -167,8 +167,6 @@ static void stack_init(void *arg)
            ((u8_t *)&netif_gw)[2], ((u8_t *)&netif_gw)[3]);
     PRINTF("************************************************\r\n");
 
-    // ping_init(&netif_gw);
-
     /* Initialize the PTP daemon. */
     ptpdInit();
 
@@ -187,10 +185,14 @@ int main(void)
     /* Disable SYSMPU. */
     base->CESR &= ~SYSMPU_CESR_VLD_MASK;
 
+    /* Initialize SystemView */
     SEGGER_SYSVIEW_Conf();
     PRINTF("RTT block address is: 0x%x \r\n", &_SEGGER_RTT);
 
-    mdioHandle.resource.csrClock_Hz = EXAMPLE_CLOCK_FREQ;
+    /* Initialize color LEDs */
+    LED_RED_INIT(LOGIC_LED_OFF);
+    LED_GREEN_INIT(LOGIC_LED_OFF);
+    LED_BLUE_INIT(LOGIC_LED_OFF);
 
     /* Initialize lwIP from thread */
     if (sys_thread_new("main", stack_init, NULL, INIT_THREAD_STACKSIZE, INIT_THREAD_PRIO) == NULL)

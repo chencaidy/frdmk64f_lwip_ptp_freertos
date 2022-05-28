@@ -2,38 +2,57 @@
 
 #include "../ptpd.h"
 #include "enet_ethernetif.h"
+#include "board.h"
 
 void displayStats(const PtpClock *ptpClock)
 {
-#if !defined(STM_EVAL_LCD)
+#if defined(FRDM_K64F)
     int leds = 0;
-
-    /* STM_EVAL_LEDOn(LED1); */
-    // HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-
 
     switch (ptpClock->portDS.portState)
     {
-    case PTP_INITIALIZING:  leds = 0; break;
+    case PTP_INITIALIZING:  leds = 1; break;
     case PTP_FAULTY:        leds = 0; break;
-    case PTP_LISTENING:     leds = 0; break;
-    case PTP_PASSIVE:       leds = 0; break;
-    case PTP_UNCALIBRATED:  leds = 0; break;
-    case PTP_SLAVE:         leds = 0; break;
+    case PTP_LISTENING:     leds = 1; break;
+    case PTP_PASSIVE:       leds = 1; break;
+    case PTP_UNCALIBRATED:  leds = 1; break;
+    case PTP_SLAVE:         leds = 3; break;
     case PTP_PRE_MASTER:    leds = 2; break;
     case PTP_MASTER:        leds = 2; break;
     case PTP_DISABLED:      leds = 0; break;
     default:                leds = 0; break;
     }
 
-    if (leds & 1)
+    /* Error */
+    if (leds == 0)
     {
-        // STM_EVAL_LEDOff(LED1);
+        LED_RED_ON();
+        LED_GREEN_OFF();
+        LED_BLUE_OFF();
     }
 
-    if (leds & 2)
+    /* Unhealth */
+    if (leds == 1)
     {
-        // HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+        LED_RED_ON();
+        LED_GREEN_ON();
+        LED_BLUE_OFF();
+    }
+
+    /* Master mode health */
+    if (leds == 2)
+    {
+        LED_RED_OFF();
+        LED_GREEN_OFF();
+        LED_BLUE_ON();
+    }
+
+    /* Slave mode health */
+    if (leds == 3)
+    {
+        LED_RED_OFF();
+        LED_GREEN_ON();
+        LED_BLUE_OFF();
     }
 
 #else

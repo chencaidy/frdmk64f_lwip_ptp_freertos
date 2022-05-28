@@ -52,6 +52,7 @@ static void ptpdThread(void *arg)
             do
             {
                 doState(&ptpClock);
+                displayStats(&ptpClock);
                 /* if there are still some packets - run stack again */
             } while (netSelect(&ptpClock.netPath, 0) > 0);
         }
