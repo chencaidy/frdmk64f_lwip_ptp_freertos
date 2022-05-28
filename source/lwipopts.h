@@ -41,6 +41,11 @@
  */
 #define LWIP_SO_RCVTIMEO 1
 
+/**
+ * SO_REUSE==1: Enable SO_REUSEADDR option.
+ */
+#define SO_REUSE 1
+
 #else
 /**
  * NO_SYS==1: Bare metal lwIP
@@ -190,6 +195,16 @@ void sys_mark_tcpip_thread(void);
 /* ---------- ICMP options ---------- */
 #ifndef LWIP_ICMP
 #define LWIP_ICMP 1
+#endif
+
+/* ---------- IGMP options ---------- */
+#ifndef LWIP_IGMP
+#define LWIP_IGMP 1
+#endif
+
+/* ---------- DNS options ---------- */
+#ifndef LWIP_DNS
+#define LWIP_DNS 1
 #endif
 
 /* ---------- RAW options ---------- */

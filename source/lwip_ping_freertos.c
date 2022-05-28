@@ -15,6 +15,7 @@
 #if LWIP_IPV4 && LWIP_RAW && LWIP_SOCKET
 
 #include "ping.h"
+#include "ptpd.h"
 #include "lwip/netifapi.h"
 #include "lwip/tcpip.h"
 #include "netif/ethernet.h"
@@ -167,6 +168,9 @@ static void stack_init(void *arg)
     PRINTF("************************************************\r\n");
 
     // ping_init(&netif_gw);
+
+    /* Initialize the PTP daemon. */
+    ptpdInit();
 
     vTaskDelete(NULL);
 }

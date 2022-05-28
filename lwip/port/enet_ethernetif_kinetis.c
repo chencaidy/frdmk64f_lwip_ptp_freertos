@@ -162,6 +162,7 @@ struct ethernetif
 #if USE_RTOS && defined(SDK_OS_FREE_RTOS)
     EventGroupHandle_t enetTransmitAccessEvent;
     EventBits_t txFlag;
+    EventBits_t txTimestampFlag;
 #endif
     enet_frame_info_t *TxFrameInfoArray;
     enet_rx_bd_struct_t *RxBuffDescrip;
@@ -172,6 +173,7 @@ struct ethernetif
 };
 
 static struct ethernetif *ptp_ethernetif = NULL;
+static enet_frame_info_t ptp_tx_frameinfo = {0};
 
 /*******************************************************************************
  * Prototypes
@@ -207,10 +209,17 @@ static void ethernet_callback(ENET_Type *base,
         case kENET_TxEvent:
         {
             portBASE_TYPE taskToWake = pdFALSE;
+            EventBits_t eventFlags = 0;
 
-            if (frameInfo->isTsAvail)
+            if (frameInfo != NULL && frameInfo->isTsAvail)
             {
+                ptp_tx_frameinfo = *frameInfo;
+                eventFlags = ethernetif->txFlag | ethernetif->txTimestampFlag;
                 SEGGER_SYSVIEW_PrintfTarget("enet send ts=%d.%09d", (uint32_t)frameInfo->timeStamp.second, frameInfo->timeStamp.nanosecond);
+            }
+            else
+            {
+                eventFlags = ethernetif->txFlag;
             }
 
 #ifdef __CA7_REV
@@ -220,7 +229,7 @@ static void ethernet_callback(ENET_Type *base,
 #endif
             {
                 xResult =
-                    xEventGroupSetBitsFromISR(ethernetif->enetTransmitAccessEvent, ethernetif->txFlag, &taskToWake);
+                    xEventGroupSetBitsFromISR(ethernetif->enetTransmitAccessEvent, eventFlags, &taskToWake);
                 if ((pdPASS == xResult) && (pdTRUE == taskToWake))
                 {
                     portYIELD_FROM_ISR(taskToWake);
@@ -228,7 +237,7 @@ static void ethernet_callback(ENET_Type *base,
             }
             else
             {
-                xEventGroupSetBits(ethernetif->enetTransmitAccessEvent, ethernetif->txFlag);
+                xEventGroupSetBits(ethernetif->enetTransmitAccessEvent, eventFlags);
             }
         }
         break;
@@ -384,7 +393,7 @@ void ethernetif_enet_ptptime_init(struct ethernetif *ethernetif,
 /**
  * Return ENET 1588 timestamp.
  */
-static void ethernetif_enet_ptptime_gettime(enet_ptp_time_t *timestamp)
+void ethernetif_enet_ptptime_gettime(enet_ptp_time_t *timestamp)
 {
     assert(ptp_ethernetif);
     ENET_Ptp1588GetTimer(ptp_ethernetif->base, &ptp_ethernetif->handle, timestamp);
@@ -393,10 +402,70 @@ static void ethernetif_enet_ptptime_gettime(enet_ptp_time_t *timestamp)
 /**
  * Update ENET 1588 timestamp.
  */
-static void ethernetif_enet_ptptime_settime(enet_ptp_time_t *timestamp)
+void ethernetif_enet_ptptime_settime(enet_ptp_time_t *timestamp)
 {
     assert(ptp_ethernetif);
     ENET_Ptp1588SetTimer(ptp_ethernetif->base, &ptp_ethernetif->handle, timestamp);
+}
+
+/**
+ * Adjust ENET 1588 timestamp frequence.
+ */
+void ethernetif_enet_ptptime_adjfreq(int32_t incps)
+{
+    int32_t neg_adj = 0;
+    uint32_t corr_inc, corr_period;
+
+    assert(ptp_ethernetif);
+
+    /*
+     * incps means the increment rate (nanseconds per second)by which to
+     * slow down or speed up the slave timer.
+     * Positive ppb need to speed up and negative value need to slow down.
+     */
+
+    if (0 == incps)
+    {
+        ptp_ethernetif->base->ATCOR &= ~ENET_ATCOR_COR_MASK; /* Reset PTP frequency */
+        return;
+    }
+
+    if (incps < 0)
+    {
+        incps = -incps;
+        neg_adj = 1;
+    }
+
+    corr_period = (uint32_t)PTP_CLOCK_FRE_RT / incps;
+
+    /* neg_adj = 1, slow down timer, neg_adj = 0, speed up timer */
+    corr_inc = (neg_adj) ? (PTP_AT_INC - 1) : (PTP_AT_INC + 1);
+
+    ENET_Ptp1588AdjustTimer(ptp_ethernetif->base, corr_inc, corr_period);
+}
+
+/**
+ * Return ENET 1588 transmit timestamp.
+ */
+void ethernetif_enet_ptptime_txframe(enet_ptp_time_t *timestamp)
+{
+    EventBits_t event;
+    /* Wait transmit completed to get timestamp */
+    event = xEventGroupWaitBits(ptp_ethernetif->enetTransmitAccessEvent, ptp_ethernetif->txTimestampFlag,
+                                pdTRUE, pdFALSE, portMAX_DELAY);
+    if (event & ptp_ethernetif->txTimestampFlag == ptp_ethernetif->txTimestampFlag)
+    {
+        timestamp->second = ptp_tx_frameinfo.timeStamp.second;
+        timestamp->nanosecond = ptp_tx_frameinfo.timeStamp.nanosecond;
+        SEGGER_SYSVIEW_PrintfTarget("ethernetif_enet_ptptime_txframe=%d.%09d",
+                                    (uint32_t)ptp_tx_frameinfo.timeStamp.second,
+                                    ptp_tx_frameinfo.timeStamp.nanosecond);
+    }
+    else
+    {
+        timestamp->second = 0;
+        timestamp->nanosecond = 0;
+    }
 }
 
 /**
@@ -459,6 +528,7 @@ void ethernetif_enet_init(struct netif *netif,
     /* Create the Event for transmit busy release trigger. */
     ethernetif->enetTransmitAccessEvent = xEventGroupCreate();
     ethernetif->txFlag                  = 0x1;
+    ethernetif->txTimestampFlag         = 0x2;
 
     config.interrupt |=
         kENET_RxFrameInterrupt | kENET_TxFrameInterrupt | kENET_TxBufferInterrupt | kENET_LateCollisionInterrupt;
@@ -532,6 +602,8 @@ static err_t enet_send_frame(struct ethernetif *ethernetif, unsigned char *data,
 
         do
         {
+            xEventGroupClearBits(ethernetif->enetTransmitAccessEvent, ethernetif->txTimestampFlag);
+
             result = ENET_SendFrame(ethernetif->base, &ethernetif->handle, data, length, 0, true, NULL);
 
             if (result == kStatus_ENET_TxFrameBusy)

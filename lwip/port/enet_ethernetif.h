@@ -44,6 +44,7 @@
 #include "lwip/err.h"
 #include "lwip/netif.h"
 #include "fsl_phy.h"
+#include "fsl_enet.h"
 
 /*******************************************************************************
  * Definitions
@@ -117,6 +118,16 @@ err_t ethernetif1_init(struct netif *netif);
  * @param netif the lwip network interface structure for this ethernetif
  */
 void ethernetif_input( struct netif *netif);
+
+/* 1588 timer clock frequence */
+#define PTP_CLOCK_FRE_RT 50000000U
+#define ENET_NANOSECOND_ONE_SECOND 1000000000U
+#define PTP_AT_INC (ENET_NANOSECOND_ONE_SECOND / PTP_CLOCK_FRE_RT)
+
+void ethernetif_enet_ptptime_txframe(enet_ptp_time_t *timestamp);
+void ethernetif_enet_ptptime_gettime(enet_ptp_time_t *timestamp);
+void ethernetif_enet_ptptime_settime(enet_ptp_time_t *timestamp);
+void ethernetif_enet_ptptime_adjfreq(int32_t incps);
 
 #if defined(__cplusplus)
 }
