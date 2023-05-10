@@ -172,8 +172,17 @@ struct ethernetif
     rx_pbuf_wrapper_t RxPbufs[ENET_RXBUFF_NUM];
 };
 
+typedef struct enet_pps_config
+{
+    enet_ptp_timer_channel_t channel;      /*!< PTP 1588 timer channel. */
+    enet_ptp_timer_channel_mode_t curMode; /*!< PTP 1588 current compare counter mode. */
+    uint32_t setCnt;                       /*!< PTP 1588 set output compare counter value. */
+    uint32_t resetCnt;                     /*!< PTP 1588 reset output compare counter value. */
+} enet_pps_config_t;
+
 static struct ethernetif *ptp_ethernetif = NULL;
 static enet_frame_info_t ptp_tx_frameinfo = {0};
+static enet_pps_config_t ptp_pps_config = {0};
 
 /*******************************************************************************
  * Prototypes
@@ -371,6 +380,42 @@ static void ethernetif_rx_free(ENET_Type *base, void *buffer, void *userData, ui
 }
 
 /**
+ * ENET 1588 timer callback for PPS.
+ */
+void ptptimer_callback(ENET_Type *base, enet_handle_t *handle)
+{
+    if (base->CHANNEL[ptp_pps_config.channel].TCSR & ENET_TCSR_TF_MASK)
+    {
+        /* Set next compare mode and counter. */
+        if (ptp_pps_config.curMode == kENET_PtpChannelSetCompare)
+        {
+            /* Change to clear mode */
+            ptp_pps_config.curMode = kENET_PtpChannelClearCompare;
+            ENET_Ptp1588SetChannelCmpValue(base, ptp_pps_config.channel, ptp_pps_config.resetCnt);
+            ENET_Ptp1588SetChannelMode(base, ptp_pps_config.channel, ptp_pps_config.curMode, true);
+            // enet_ptp_time_t ts;
+            // ENET_Ptp1588GetTimerNoIrqDisable(base, handle, &ts);
+            // SEGGER_SYSVIEW_PrintfTarget("(%d.%09d) Set PPS\r\n", (uint32_t)ts.second, ts.nanosecond);
+        }
+        else
+        {
+            /* Change to set mode */
+            ptp_pps_config.curMode = kENET_PtpChannelSetCompare;
+            ENET_Ptp1588SetChannelCmpValue(base, ptp_pps_config.channel, ptp_pps_config.setCnt);
+            ENET_Ptp1588SetChannelMode(base, ptp_pps_config.channel, ptp_pps_config.curMode, true);
+            // enet_ptp_time_t ts;
+            // ENET_Ptp1588GetTimerNoIrqDisable(base, handle, &ts);
+            // SEGGER_SYSVIEW_PrintfTarget("(%d.%09d) Clear PPS\r\n", (uint32_t)ts.second, ts.nanosecond);
+        }
+        /* Wait for flags cleared */
+        do
+        {
+            ENET_Ptp1588ClearChannelStatus(base, ptp_pps_config.channel);
+        } while (true == ENET_Ptp1588GetChannelStatus(base, ptp_pps_config.channel));
+    }
+}
+
+/**
  * Initializes ENET 1588 timer.
  */
 void ethernetif_enet_ptptime_init(struct ethernetif *ethernetif,
@@ -386,6 +431,25 @@ void ethernetif_enet_ptptime_init(struct ethernetif *ethernetif,
     ptpConfig.ptp1588ClockSrc_Hz = CLOCK_GetFreq(kCLOCK_Osc0ErClk);
     /* Configure PTP */
     ENET_Ptp1588Configure(ptp_ethernetif->base, &ptp_ethernetif->handle, &ptpConfig);
+
+    /* Configure PPS */
+    if (pps_en)
+    {
+        ptp_pps_config.channel = ptpConfig.channel;
+        ptp_pps_config.curMode = kENET_PtpChannelSetCompare;
+        ptp_pps_config.setCnt = 20;        // Set on 20ns
+        ptp_pps_config.resetCnt = 1000000; // Clear on 1ms
+
+        /* Enable 1588 timer and waiting stable */
+        do
+        {
+            ENET_Ptp1588ClearChannelStatus(ptp_ethernetif->base, ptp_pps_config.channel);
+        } while (true == ENET_Ptp1588GetChannelStatus(ptp_ethernetif->base, ptp_pps_config.channel));
+
+        ENET_Ptp1588SetChannelCmpValue(ptp_ethernetif->base, ptp_pps_config.channel, ptp_pps_config.setCnt);
+        ENET_Ptp1588SetChannelMode(ptp_ethernetif->base, ptp_pps_config.channel, ptp_pps_config.curMode, true);
+        ENET_Set1588TimerISRHandler(ptp_ethernetif->base, ptptimer_callback);
+    }
 }
 
 /**
@@ -568,7 +632,7 @@ void ethernetif_enet_init(struct netif *netif,
     ENET_Init(ethernetif->base, &ethernetif->handle, &config, &buffCfg[0], netif->hwaddr, sysClock);
 
     /* Initialize the ENET 1588 module. */
-    ethernetif_enet_ptptime_init(ethernetif, false);
+    ethernetif_enet_ptptime_init(ethernetif, true);
     ENET_SetTxReclaim(&ethernetif->handle, true, 0);
 
     ENET_ActiveRead(ethernetif->base);
