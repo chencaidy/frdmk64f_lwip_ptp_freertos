@@ -67,15 +67,9 @@
  ******************************************************************************/
 
 void ethernetif_phy_init(struct ethernetif *ethernetif,
-                         const ethernetif_config_t *ethernetifConfig,
-                         phy_speed_t *speed,
-                         phy_duplex_t *duplex)
+                         const ethernetif_config_t *ethernetifConfig)
 {
     status_t status;
-    bool link              = false;
-    bool autonego          = false;
-    uint32_t initWaitCount = 0;
-    uint32_t autoWaitCount = 0;
     phy_config_t phyConfig = {
         .phyAddr = ethernetifConfig->phyHandle->phyAddr,
         .autoNeg = true,
@@ -85,46 +79,8 @@ void ethernetif_phy_init(struct ethernetif *ethernetif,
 
     LWIP_PLATFORM_DIAG(("Initializing PHY..."));
 
-    while ((initWaitCount < ENET_ATONEGOTIATION_TIMEOUT) && (!(link && autonego)))
-    {
-        status = PHY_Init(ethernetifConfig->phyHandle, &phyConfig);
-
-        if (kStatus_Success != status)
-        {
-            LWIP_ASSERT("\r\nCannot initialize PHY.\r\n", 0);
-        }
-
-        /* Wait for auto-negotiation success and link up */
-        autoWaitCount = ENET_ATONEGOTIATION_TIMEOUT;
-        do
-        {
-            PHY_GetAutoNegotiationStatus(ethernetifConfig->phyHandle, &autonego);
-            PHY_GetLinkStatus(ethernetifConfig->phyHandle, &link);
-            if (autonego && link)
-            {
-                break;
-            }
-        } while (--autoWaitCount);
-        if (!autonego)
-        {
-            PRINTF("PHY Auto-negotiation failed. Please check the cable connection and link partner setting.\r\n");
-        }
-
-        initWaitCount++;
-    }
-
-    if (autonego && link)
-    {
-        /* Get the actual PHY link speed. */
-        PHY_GetLinkSpeedDuplex(ethernetifConfig->phyHandle, speed, duplex);
-    }
-#if 0 /* Disable assert. If initial auto-negation is timeout, \ \
-         the ENET is set to default (100Mbs and full-duplex). */
-    else
-    {
-        LWIP_ASSERT("\r\nGiving up PHY initialization. Please check the ENET cable connection and link partner setting and reset the board.\r\n", 0);
-    }
-#endif
+    status = PHY_Init(ethernetifConfig->phyHandle, &phyConfig);
+    LWIP_ASSERT("Cannot initialize PHY.", (status == kStatus_Success));
 }
 
 /**

@@ -123,19 +123,66 @@ extern SEGGER_RTT_CB _SEGGER_RTT;
  * Variables
  ******************************************************************************/
 
+static struct netif netif;
 static mdio_handle_t mdioHandle = {.ops = &EXAMPLE_MDIO_OPS};
-static phy_handle_t phyHandle   = {.phyAddr = EXAMPLE_PHY_ADDRESS, .mdioHandle = &mdioHandle, .ops = &EXAMPLE_PHY_OPS};
+static phy_handle_t phyHandle = {.phyAddr = EXAMPLE_PHY_ADDRESS, .mdioHandle = &mdioHandle, .ops = &EXAMPLE_PHY_OPS};
 
 /*******************************************************************************
  * Code
  ******************************************************************************/
 
 /*!
+ * @brief PHY link check task.
+ */
+static void phylink_task(void *arg)
+{
+    phy_handle_t *handle = (phy_handle_t *)arg;
+    ENET_Type *base = (ENET_Type *)handle->mdioHandle->resource.base;
+    phy_speed_t speed = kPHY_Speed100M;
+    phy_duplex_t duplex = kPHY_FullDuplex;
+    bool autonego = false;
+    bool link = false;
+    bool link_last = false;
+
+    while (1)
+    {
+        link_last = link;
+        PHY_GetLinkStatus(handle, &link);
+
+        if (link != link_last)
+        {
+            if (link)
+            {
+                /* Turn on LwIP stack */
+                netifapi_netif_set_link_up(&netif);
+                /* Set enet mac speed */
+                PHY_GetAutoNegotiationStatus(handle, &autonego);
+                if (autonego)
+                {
+                    PHY_GetLinkSpeedDuplex(handle, &speed, &duplex);
+                    ENET_SetMII(base, (enet_mii_speed_t)speed, (enet_mii_duplex_t)duplex);
+                    PRINTF("phylink: Link is up - %s/%s\r\n",
+                           speed == kPHY_Speed10M ? "10M" : "100M",
+                           duplex == kPHY_HalfDuplex ? "Half" : "Full");
+                }
+            }
+            else
+            {
+                /* Turn off LwIP stack */
+                netifapi_netif_set_link_down(&netif);
+                PRINTF("phylink: Link is down\r\n");
+            }
+        }
+
+        vTaskDelay(500);
+    }
+}
+
+/*!
  * @brief Initializes lwIP stack.
  */
 static void stack_init(void *arg)
 {
-    static struct netif netif;
     ip4_addr_t netif_ipaddr, netif_netmask, netif_gw;
     ethernetif_config_t enet_config = {
         .phyHandle  = &phyHandle,
@@ -166,6 +213,10 @@ static void stack_init(void *arg)
     PRINTF(" IPv4 Gateway     : %u.%u.%u.%u\r\n", ((u8_t *)&netif_gw)[0], ((u8_t *)&netif_gw)[1],
            ((u8_t *)&netif_gw)[2], ((u8_t *)&netif_gw)[3]);
     PRINTF("************************************************\r\n");
+
+    /* Enable PHY link check */
+    if (sys_thread_new("phy_thread", phylink_task, &phyHandle, 512, DEFAULT_THREAD_PRIO) == NULL)
+        LWIP_ASSERT("phy_thread: Task creation failed.", 0);
 
     /* Initialize the PTP daemon. */
     ptpdInit();

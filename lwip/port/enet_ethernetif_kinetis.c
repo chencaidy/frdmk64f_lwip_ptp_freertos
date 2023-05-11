@@ -540,8 +540,6 @@ void ethernetif_enet_init(struct netif *netif,
     enet_config_t config;
     uint32_t sysClock;
     enet_buffer_config_t buffCfg[ENET_RING_NUM];
-    phy_speed_t speed;
-    phy_duplex_t duplex;
     int i;
 
     /* prepare the buffer configuration. */
@@ -571,10 +569,6 @@ void ethernetif_enet_init(struct netif *netif,
     extern void BOARD_ENETFlexibleConfigure(enet_config_t * config);
     BOARD_ENETFlexibleConfigure(&config);
 #endif
-
-    ethernetif_phy_init(ethernetif, ethernetifConfig, &speed, &duplex);
-    config.miiSpeed  = (enet_mii_speed_t)speed;
-    config.miiDuplex = (enet_mii_duplex_t)duplex;
 
 #if USE_RTOS && defined(SDK_OS_FREE_RTOS)
     uint32_t instance;
@@ -630,6 +624,9 @@ void ethernetif_enet_init(struct netif *netif,
 
     /* Initialize the ENET module. */
     ENET_Init(ethernetif->base, &ethernetif->handle, &config, &buffCfg[0], netif->hwaddr, sysClock);
+
+    /* Initialize the PHY. */
+    ethernetif_phy_init(ethernetif, ethernetifConfig);
 
     /* Initialize the ENET 1588 module. */
     ethernetif_enet_ptptime_init(ethernetif, true);

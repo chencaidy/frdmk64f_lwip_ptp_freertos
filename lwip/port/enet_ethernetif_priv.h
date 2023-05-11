@@ -24,9 +24,7 @@ void ethernetif_enet_init(struct netif *netif, struct ethernetif *ethernetif,
                           const ethernetif_config_t *ethernetifConfig);
 
 void ethernetif_phy_init(struct ethernetif *ethernetif,
-                         const ethernetif_config_t *ethernetifConfig,
-                         phy_speed_t *speed,
-                         phy_duplex_t *duplex);
+                         const ethernetif_config_t *ethernetifConfig);
 
 void *ethernetif_get_enet_base(const uint8_t enetIdx);
 
