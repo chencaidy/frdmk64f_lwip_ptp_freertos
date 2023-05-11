@@ -330,12 +330,12 @@ void updateClock(PtpClock *ptpClock)
     switch (ptpClock->portDS.delayMechanism)
     {
     case E2E:
-        DBG("updateClock: one-way delay averaged (E2E):  %10ds %11dns\n",
+        DBG("updateClock: one-way delay averaged (E2E): %ds %dns\n",
             ptpClock->currentDS.meanPathDelay.seconds, ptpClock->currentDS.meanPathDelay.nanoseconds);
         break;
 
     case P2P:
-        DBG("updateClock: one-way delay averaged (P2P):  %10ds %11dns\n",
+        DBG("updateClock: one-way delay averaged (P2P): %ds %dns\n",
             ptpClock->portDS.peerMeanPathDelay.seconds, ptpClock->portDS.peerMeanPathDelay.nanoseconds);
         break;
 
@@ -343,9 +343,9 @@ void updateClock(PtpClock *ptpClock)
         DBG("updateClock: one-way delay not computed\n");
     }
 
-    DBG("updateClock: offset from master:      %10ds %11dns\n",
+    DBG("updateClock: offset from master: %ds %dns\n",
 
         ptpClock->currentDS.offsetFromMaster.seconds, ptpClock->currentDS.offsetFromMaster.nanoseconds);
 
-    DBG("updateClock: observed drift:          %10d\n", ptpClock->observedDrift);
+    DBG("updateClock: observed drift: %d\n", ptpClock->observedDrift);
 }

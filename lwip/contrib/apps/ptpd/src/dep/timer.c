@@ -49,6 +49,9 @@ void timerStart(UInteger16 index, UInteger32 interval_ms, IntervalTimer *itimer)
     if (index >= TIMER_ARRAY_SIZE)
         return;
 
+    if (interval_ms == 0)
+        return;
+
     ptpd_timers_expired[index] = FALSE;
     if (xTimerChangePeriod(ptpd_timers[index], interval_ms, 0) == pdPASS)
     {

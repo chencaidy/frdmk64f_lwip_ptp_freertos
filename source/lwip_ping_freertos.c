@@ -174,7 +174,7 @@ static void phylink_task(void *arg)
             }
         }
 
-        vTaskDelay(500);
+        sys_msleep(500);
     }
 }
 
