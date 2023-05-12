@@ -54,6 +54,7 @@
 #if USE_RTOS && defined(SDK_OS_FREE_RTOS)
 #include "FreeRTOS.h"
 #include "event_groups.h"
+#include "semphr.h"
 #endif
 
 #include "enet_ethernetif.h"
@@ -384,6 +385,9 @@ static void ethernetif_rx_free(ENET_Type *base, void *buffer, void *userData, ui
  */
 void ptptimer_callback(ENET_Type *base, enet_handle_t *handle)
 {
+    extern SemaphoreHandle_t pps_semaphore;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
     if (base->CHANNEL[ptp_pps_config.channel].TCSR & ENET_TCSR_TF_MASK)
     {
         /* Set next compare mode and counter. */
@@ -393,6 +397,8 @@ void ptptimer_callback(ENET_Type *base, enet_handle_t *handle)
             ptp_pps_config.curMode = kENET_PtpChannelClearCompare;
             ENET_Ptp1588SetChannelCmpValue(base, ptp_pps_config.channel, ptp_pps_config.resetCnt);
             ENET_Ptp1588SetChannelMode(base, ptp_pps_config.channel, ptp_pps_config.curMode, true);
+            /* Send PPS set semaphore */
+            xSemaphoreGiveFromISR(pps_semaphore, &xHigherPriorityTaskWoken);
             // enet_ptp_time_t ts;
             // ENET_Ptp1588GetTimerNoIrqDisable(base, handle, &ts);
             // SEGGER_SYSVIEW_PrintfTarget("(%d.%09d) Set PPS\r\n", (uint32_t)ts.second, ts.nanosecond);
@@ -412,6 +418,8 @@ void ptptimer_callback(ENET_Type *base, enet_handle_t *handle)
         {
             ENET_Ptp1588ClearChannelStatus(base, ptp_pps_config.channel);
         } while (true == ENET_Ptp1588GetChannelStatus(base, ptp_pps_config.channel));
+
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
 

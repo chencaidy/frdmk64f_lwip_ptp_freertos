@@ -26,6 +26,7 @@ extern "C" {
 void BOARD_InitBootPins(void);
 
 #define SOPT5_UART0TXSRC_UART_TX 0x00u /*!<@brief UART 0 transmit data source select: UART0_TX pin */
+#define SOPT5_UART1TXSRC_UART_TX 0x00u /*!<@brief UART 1 transmit data source select: UART1_TX pin */
 
 /*! @name PORTB16 (number 62), U7[4]/UART0_RX
   @{ */
@@ -126,22 +127,13 @@ void BOARD_InitBootPins(void);
 #define BOARD_INITPINS_RMII0_RXER_PIN_MASK (1U << 5U)      /*!<@brief PORT pin mask */
                                                            /* @} */
 
-/*! @name PORTC16 (number 90), J1[2]
+/*! @name PORTC18 (number 92), J6[8]/RF_WIFI_IRQ
   @{ */
 
 /* Symbols to be used with PORT driver */
-#define BOARD_INITPINS_TMR_1588_0_PORT PORTC                /*!<@brief PORT peripheral base pointer */
-#define BOARD_INITPINS_TMR_1588_0_PIN 16U                   /*!<@brief PORT pin number */
-#define BOARD_INITPINS_TMR_1588_0_PIN_MASK (1U << 16U)      /*!<@brief PORT pin mask */
-                                                            /* @} */
-
-/*! @name PORTC17 (number 91), J1[4]
-  @{ */
-
-/* Symbols to be used with PORT driver */
-#define BOARD_INITPINS_TMR_1588_1_PORT PORTC                /*!<@brief PORT peripheral base pointer */
-#define BOARD_INITPINS_TMR_1588_1_PIN 17U                   /*!<@brief PORT pin number */
-#define BOARD_INITPINS_TMR_1588_1_PIN_MASK (1U << 17U)      /*!<@brief PORT pin mask */
+#define BOARD_INITPINS_TMR_1588_2_PORT PORTC                /*!<@brief PORT peripheral base pointer */
+#define BOARD_INITPINS_TMR_1588_2_PIN 18U                   /*!<@brief PORT pin number */
+#define BOARD_INITPINS_TMR_1588_2_PIN_MASK (1U << 18U)      /*!<@brief PORT pin mask */
                                                             /* @} */
 
 /*! @name PORTB22 (number 68), D12[1]/LEDRGB_RED
@@ -182,6 +174,24 @@ void BOARD_InitBootPins(void);
 #define BOARD_INITPINS_LED_BLUE_PIN 21U                   /*!<@brief PORT pin number */
 #define BOARD_INITPINS_LED_BLUE_PIN_MASK (1U << 21U)      /*!<@brief PORT pin mask */
                                                           /* @} */
+
+/*! @name PORTC17 (number 91), J1[4]
+  @{ */
+
+/* Symbols to be used with PORT driver */
+#define BOARD_INITPINS_TMR_1588_1_PORT PORTC                /*!<@brief PORT peripheral base pointer */
+#define BOARD_INITPINS_TMR_1588_1_PIN 17U                   /*!<@brief PORT pin number */
+#define BOARD_INITPINS_TMR_1588_1_PIN_MASK (1U << 17U)      /*!<@brief PORT pin mask */
+                                                            /* @} */
+
+/*! @name PORTC16 (number 90), J1[2]
+  @{ */
+
+/* Symbols to be used with PORT driver */
+#define BOARD_INITPINS_TMR_1588_0_PORT PORTC                /*!<@brief PORT peripheral base pointer */
+#define BOARD_INITPINS_TMR_1588_0_PIN 16U                   /*!<@brief PORT pin number */
+#define BOARD_INITPINS_TMR_1588_0_PIN_MASK (1U << 16U)      /*!<@brief PORT pin mask */
+                                                            /* @} */
 
 /*!
  * @brief Configures pin routing and optionally pin electrical features.

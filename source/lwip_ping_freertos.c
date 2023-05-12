@@ -30,8 +30,13 @@
 #include "fsl_enet_mdio.h"
 #include "fsl_device_registers.h"
 
+#include "fsl_uart.h"
+#include "fsl_uart_freertos.h"
+
 /* SEGGER SystemView includes */
 #include "SEGGER_RTT.h"
+
+#include "time.h"
 
 /*******************************************************************************
  * Definitions
@@ -127,9 +132,75 @@ static struct netif netif;
 static mdio_handle_t mdioHandle = {.ops = &EXAMPLE_MDIO_OPS};
 static phy_handle_t phyHandle = {.phyAddr = EXAMPLE_PHY_ADDRESS, .mdioHandle = &mdioHandle, .ops = &EXAMPLE_PHY_OPS};
 
+static uart_rtos_handle_t handle;
+static struct _uart_handle t_handle;
+static uint8_t uart_buffer[32];
+
+SemaphoreHandle_t pps_semaphore = NULL;
+
 /*******************************************************************************
  * Code
  ******************************************************************************/
+
+uint8_t nmea_checksum(const char *sentence)
+{
+    uint8_t checksum = 0x00;
+
+    if (*sentence == '$')
+        sentence++;
+
+    while (*sentence && *sentence != '*')
+        checksum ^= *sentence++;
+
+    return checksum;
+}
+
+static void nmea_task(void *arg)
+{
+    uart_rtos_config_t uart_config;
+    char rmc[128] = {0};
+    int rmc_size;
+    uint8_t checksum;
+    enet_ptp_time_t ts;
+    struct tm *utc;
+
+    NVIC_SetPriority(UART1_RX_TX_IRQn, 5);
+
+    uart_config.base = UART1;
+    uart_config.srcclk = CLOCK_GetFreq(UART1_CLK_SRC);
+    uart_config.baudrate = 115200;
+    uart_config.parity = kUART_ParityDisabled;
+    uart_config.stopbits = kUART_OneStopBit;
+    uart_config.buffer = uart_buffer;
+    uart_config.buffer_size = sizeof(uart_buffer);
+
+    if (kStatus_Success != UART_RTOS_Init(&handle, &t_handle, &uart_config))
+        vTaskSuspend(NULL);
+
+    pps_semaphore = xSemaphoreCreateBinary();
+
+    while (1)
+    {
+        if (xSemaphoreTake(pps_semaphore, portMAX_DELAY) == pdTRUE)
+        {
+            /* Prepare nmea message. */
+            ethernetif_enet_ptptime_gettime(&ts);
+            utc = localtime((time_t *)&ts.second);
+            sprintf(rmc, "$GPRMC,%02d%02d%02d.%02d,A,0000.00,N,00000.00,E,0.0,0.0,%02d%02d%02d,0.0,E,M*",
+                    utc->tm_hour, utc->tm_min, utc->tm_sec, 0,
+                    utc->tm_mday, utc->tm_mon + 1, utc->tm_year % 100);
+            checksum = nmea_checksum(rmc);
+            sprintf(rmc, "%s%X\r\n", rmc, checksum);
+            /* Delay for sync time sequence */
+            vTaskDelay(20);
+            /* Send nmea message. */
+            if (kStatus_Success != UART_RTOS_Send(&handle, (uint8_t *)rmc, strlen(rmc)))
+            {
+                vTaskSuspend(NULL);
+            }
+        }
+    }
+}
 
 /*!
  * @brief PHY link check task.
@@ -217,6 +288,9 @@ static void stack_init(void *arg)
     /* Enable PHY link check */
     if (sys_thread_new("phy_thread", phylink_task, &phyHandle, 512, DEFAULT_THREAD_PRIO) == NULL)
         LWIP_ASSERT("phy_thread: Task creation failed.", 0);
+
+    if (sys_thread_new("nmea_thread", nmea_task, NULL, 1024, DEFAULT_THREAD_PRIO) == NULL)
+        LWIP_ASSERT("nmea_thread: Task creation failed.", 0);
 
     /* Initialize the PTP daemon. */
     ptpdInit();

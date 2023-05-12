@@ -24,6 +24,13 @@
 * Phase support 0 to 2pi
 * Output GPIO is PTC16
 
+### NMEA GPRMC Output
+
+* Support programmable phase
+* Fake RMC location at null island
+* Baudrate is 115200 8N1
+* Output GPIO is PTC4
+
 ## Progress
 
 | Feature | Support |
@@ -34,4 +41,5 @@
 | PTPd | YES |
 | GPS PPS Input | WIP |
 | 1PPS Simulation | YES |
+| NMEA RMC Simulation | YES |
 | Web Control Panel | WIP |
